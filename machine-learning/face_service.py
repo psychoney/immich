@@ -16,6 +16,7 @@ class ImageResponse(BaseModel):
     fileType: int
     fileCode: str
     ndarray: Optional[List[float]] = None
+    faceCount: int = 0
 
 class BatchImageRequest(BaseModel):
     images: List[ImageRequest]
@@ -48,8 +49,14 @@ class FaceService:
         self.max_distance = max_distance
         self.min_faces = min_faces
     
-    def get_face_embedding(self, image_path: str) -> Optional[List[float]]:
-        """获取单个图片的人脸特征向量"""
+    def get_face_embedding(self, image_path: str) -> tuple[Optional[List[List[float]]], int]:
+        """获取单个图片的人脸特征向量
+        
+        Returns:
+            tuple: (embeddings, face_count)
+            - embeddings: 人脸特征向量列表，如果没有人脸则为None
+            - face_count: 检测到的人脸数量
+        """
         config = {
             "facial-recognition": {
                 "detection": {
@@ -65,7 +72,7 @@ class FaceService:
         try:
             if not os.path.exists(image_path):
                 print(f"图片不存在: {image_path}")
-                return None
+                return None, 0
                 
             with open(image_path, 'rb') as img_file:
                 files = {
@@ -79,15 +86,21 @@ class FaceService:
                 if response.status_code == 200:
                     result = response.json()
                     faces = result.get("facial-recognition", [])
-                    if faces:
-                        return faces[0]["embedding"]
-                    return None
+                    face_count = len(faces)
+                    
+                    if face_count > 0:
+                        # 有人脸时，返回所有人脸的特征向量
+                        embeddings = [face["embedding"] for face in faces]
+                        return embeddings, face_count
+                    else:
+                        # 没有人脸时，返回None和0
+                        print(f"图片 {image_path} 没有检测到人脸")
+                        return None, 0
                     
         except Exception as e:
             print(f"处理图片 {image_path} 时出错: {e}")
-            return None
+            return None, 0
             
-        return None
     
     def cluster_faces(self, faces: List[ClusterRequest]) -> List[ClusterResponse]:
         """聚类人脸"""
@@ -154,18 +167,31 @@ async def extract_faces(request: BatchImageRequest):
         request: 包含图片路径和编码的请求
         
     Returns:
-        包含处理结果的响应
+        包含处理结果的响应。
+        如果图片中有人脸，返回特征向量和人脸数量；
+        如果没有人脸，返回空响应。
     """
     try:
         results = []
         for image in request.images:
-            embedding = face_service.get_face_embedding(image.filePath)
+            embeddings, face_count = face_service.get_face_embedding(image.filePath)
             
-            response = ImageResponse(
-                fileType=1 if embedding is not None else 0,
-                fileCode=image.fileCode,
-                ndarray=embedding
-            )
+            if face_count > 0:
+                # 有人脸时，返回特征向量和人脸数量
+                response = ImageResponse(
+                    fileType=1,
+                    fileCode=image.fileCode,
+                    ndarray=embeddings[0] if face_count == 1 else None,  # 单人脸返回特征向量，多人脸返回None
+                    faceCount=face_count
+                )
+            else:
+                # 没有人脸时，返回空响应
+                response = ImageResponse(
+                    fileType=0,
+                    fileCode=image.fileCode,
+                    ndarray=None,
+                    faceCount=0
+                )
             results.append(response)
             
         return BatchImageResponse(results=results)
