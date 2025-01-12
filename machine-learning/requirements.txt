@@ -1,0 +1,14 @@
+# Web框架
+fastapi
+uvicorn
+
+# 数据处理和模型
+numpy
+scikit-learn
+pydantic
+
+# HTTP请求
+requests
+
+# ASGI服务器
+python-multipart
