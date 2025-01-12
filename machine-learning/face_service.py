@@ -42,7 +42,7 @@ class BatchClusterResponse(BaseModel):
 # 人脸服务
 class FaceService:
     def __init__(self, 
-                 api_url: str = "http://home.plantplanethome.com:3003/predict",
+                 api_url: str = "http://localhost:3003/predict",
                  max_distance: float = 0.6,
                  min_faces: int = 2):
         self.api_url = api_url
